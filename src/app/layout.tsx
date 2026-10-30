@@ -5,7 +5,7 @@ export const metadata: Metadata = {
   title: '音声進捗更新',
   description: '音声で話すだけで案件進捗をスプレッドシートへ反映します',
 }
-　
+
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,

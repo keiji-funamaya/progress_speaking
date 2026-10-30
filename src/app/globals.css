@@ -1,4 +1,6 @@
 @import 'tailwindcss';
+/* 本番ビルドでソース自動検出が効かないため、走査対象を明示します */
+@source "../**/*.{ts,tsx}";
 
 :root {
   --background: #f6f7f9;
