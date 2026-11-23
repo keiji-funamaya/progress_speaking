@@ -82,16 +82,28 @@ export function VoiceRecorder({
       {error ? <Banner tone="error">{error}</Banner> : null}
 
       {recording ? (
-        <div className="space-y-3">
-          <div className="flex items-center justify-center gap-3 rounded-[3px] bg-[#ffebe6] py-6">
+        <>
+          <div className="flex items-center justify-center gap-3 rounded-[3px] bg-[#ffebe6] py-4">
             <span className="h-3 w-3 animate-pulse rounded-full bg-[#de350b]" />
-            <span className="text-sm font-semibold text-[#bf2600]">録音中</span>
-            <span className="font-mono text-xl text-[#bf2600]">{formatSeconds(seconds)}</span>
+            <span className="text-sm font-semibold text-[#bf2600]">
+              録音中です。下の案件一覧を見ながら話せます
+            </span>
           </div>
-          <Button variant="danger" fullWidth onClick={stopRecording}>
-            ■ 停止
-          </Button>
-        </div>
+
+          {/* 一覧をスクロールしてもすぐ停止できるよう、画面下に固定します */}
+          <div className="fixed inset-x-0 bottom-0 z-20 border-t border-[#ffbdad] bg-white shadow-[0_-2px_6px_rgba(9,30,66,0.15)]">
+            <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+              <span className="h-3 w-3 shrink-0 animate-pulse rounded-full bg-[#de350b]" />
+              <span className="text-sm font-semibold text-[#bf2600]">録音中</span>
+              <span className="flex-1 font-mono text-xl text-[#bf2600]">
+                {formatSeconds(seconds)}
+              </span>
+              <Button variant="danger" onClick={stopRecording}>
+                ■ 停止
+              </Button>
+            </div>
+          </div>
+        </>
       ) : (
         <button
           type="button"

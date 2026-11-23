@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
+import { ProjectBoard } from '@/components/ProjectBoard'
 import { VoiceRecorder } from '@/components/VoiceRecorder'
 import { ReviewBlockCard } from '@/components/ReviewBlockCard'
 import { Badge, Banner, Button, Card, Label, SectionTitle } from '@/components/ui'
@@ -135,16 +136,21 @@ export function VoiceClient() {
 
       {/* 1. 録音 */}
       {step === 'record' ? (
-        <Card>
-          <SectionTitle>進捗を話してください</SectionTitle>
-          <p className="mb-4 text-sm text-[#5e6c84]">
-            複数の案件をまとめて話せます。停止すると自動で文字起こしされます。
-          </p>
-          <VoiceRecorder onRecorded={handleRecorded} disabled={loading !== null} />
-          {loading === 'transcribe' ? (
-            <p className="mt-3 text-center text-sm text-[#5e6c84]">文字起こし中...</p>
-          ) : null}
-        </Card>
+        <>
+          <Card>
+            <SectionTitle>進捗を話してください</SectionTitle>
+            <p className="mb-4 text-sm text-[#5e6c84]">
+              複数の案件をまとめて話せます。停止すると自動で文字起こしされます。
+            </p>
+            <VoiceRecorder onRecorded={handleRecorded} disabled={loading !== null} />
+            {loading === 'transcribe' ? (
+              <p className="mt-3 text-center text-sm text-[#5e6c84]">文字起こし中...</p>
+            ) : null}
+          </Card>
+
+          {/* スプシの中身を見ながら話せるよう、同じ画面に案件一覧を表示します */}
+          <ProjectBoard />
+        </>
       ) : null}
 
       {/* 2. 文字起こし確認 */}

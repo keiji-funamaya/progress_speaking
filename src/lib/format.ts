@@ -1,4 +1,5 @@
 import { APP_TIMEZONE } from '@/lib/constants'
+import { buildDateContext } from '@/lib/ai/datetime'
 import type {
   BatchStatus,
   CellFormat,
@@ -59,6 +60,71 @@ export function logStatusTone(status: LogStatus): 'success' | 'warning' | 'error
 /** 空文字を「(空)」として表示します */
 export function displayValue(value: string | null | undefined): string {
   return value && value !== '' ? value : '(空)'
+}
+
+/** 期日が近いと判定する日数（今日を含めて何日先まで） */
+const DUE_SOON_DAYS = 3
+
+export type DueState = 'overdue' | 'soon' | 'later'
+
+export interface DueInfo {
+  state: DueState
+  /** 今日からの日数（過去はマイナス） */
+  days: number
+  /** 今週（今日〜日曜）に含まれるか */
+  thisWeek: boolean
+}
+
+/**
+ * シートの日付文字列を YYYY-MM-DD に変換します。
+ * 対応形式: 2026/11/20・2026-11-20・2026年11月20日・11/20・11月20日（年なしは今年とみなします）
+ */
+function parseSheetDate(value: string, currentYear: number): string | null {
+  const text = value.trim()
+  const full = text.match(/^(\d{4})[/\-年.](\d{1,2})[/\-月.](\d{1,2})/)
+  const short = text.match(/^(\d{1,2})[/月](\d{1,2})/)
+  const [year, month, day] = full
+    ? [Number(full[1]), Number(full[2]), Number(full[3])]
+    : short
+      ? [currentYear, Number(short[1]), Number(short[2])]
+      : [0, 0, 0]
+
+  if (year === 0 || month < 1 || month > 12 || day < 1 || day > 31) {
+    return null
+  }
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
+/** 期日の状態（期限切れ / 近い / 先）を判定します。日付として読めなければ null */
+export function dueInfo(value: string | null | undefined, now: Date = new Date()): DueInfo | null {
+  if (!value) {
+    return null
+  }
+  const { today } = buildDateContext(now)
+  const parsed = parseSheetDate(value, Number(today.slice(0, 4)))
+  if (!parsed) {
+    return null
+  }
+
+  const days = Math.round(
+    (Date.parse(`${parsed}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000,
+  )
+  // 今週の残り日数（日曜を週末とします）
+  const daysToSunday = (7 - new Date(`${today}T00:00:00Z`).getUTCDay()) % 7
+
+  return {
+    state: days < 0 ? 'overdue' : days <= DUE_SOON_DAYS ? 'soon' : 'later',
+    days,
+    thisWeek: days >= 0 && days <= daysToSunday,
+  }
+}
+
+/** 期日の補足表示（「期限切れ」「今日」「あと2日」など） */
+export function describeDue(info: DueInfo): string {
+  if (info.days < 0) return `${-info.days}日超過`
+  if (info.days === 0) return '今日'
+  if (info.days === 1) return '明日'
+  return `あと${info.days}日`
 }
 
 export const HORIZONTAL_ALIGN_LABEL: Record<HorizontalAlign, string> = {
