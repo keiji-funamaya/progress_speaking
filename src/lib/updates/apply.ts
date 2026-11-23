@@ -1,6 +1,12 @@
 import { createAdminSupabase } from '@/lib/supabase/server'
 import { columnIndexToLetter } from '@/lib/sheets/a1'
-import { applyCellFormat, fetchCellFormat, fetchCellValue, updateCell } from '@/lib/sheets/client'
+import {
+  applyCellFormat,
+  buildSheetUrl,
+  fetchCellFormat,
+  fetchCellValue,
+  updateCell,
+} from '@/lib/sheets/client'
 import { formatFromMapping, hasCellFormat } from '@/lib/format'
 import {
   assertHeaderUnchanged,
@@ -43,6 +49,8 @@ export interface ApplyResult {
   appliedCount: number
   failedCount: number
   conflictCount: number
+  /** 反映先のシート（タブ）を直接開く URL（完了画面のボタン用） */
+  sheetUrl: string
 }
 
 interface PreparedCell {
@@ -387,5 +395,6 @@ export async function applyUpdates(
     appliedCount: results.filter((result) => result.status === 'applied').length,
     failedCount: results.filter((result) => result.status === 'failed').length,
     conflictCount: results.filter((result) => result.status === 'conflict').length,
+    sheetUrl: buildSheetUrl(spreadsheetId, context.sheetConfig.sheet_id),
   }
 }

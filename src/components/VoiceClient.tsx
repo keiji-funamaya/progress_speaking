@@ -41,6 +41,7 @@ interface ApplyResponse {
   appliedCount: number
   failedCount: number
   conflictCount: number
+  sheetUrl: string
 }
 
 export function VoiceClient() {
@@ -251,6 +252,11 @@ export function VoiceClient() {
           </Card>
 
           <div className="flex flex-col gap-2">
+            <a href={applyResult.sheetUrl} target="_blank" rel="noopener noreferrer">
+              <Button variant="secondary" fullWidth>
+                スプレッドシートを開く ↗
+              </Button>
+            </a>
             <Button variant="danger" onClick={handleRollbackAll} disabled={loading !== null}>
               {loading === 'rollback' ? '処理中...' : '今回の変更を元に戻す'}
             </Button>

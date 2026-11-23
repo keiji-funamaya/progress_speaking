@@ -34,6 +34,11 @@ export function extractSpreadsheetId(input: string): string | null {
   return null
 }
 
+/** Spreadsheet ID と Sheet ID から、そのシート（タブ）を直接開く URL を作ります */
+export function buildSheetUrl(spreadsheetId: string, sheetId: number): string {
+  return `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${sheetId}`
+}
+
 /** Spreadsheet のメタ情報と Sheet 一覧を取得します */
 export async function fetchSpreadsheetMeta(
   sheetsApi: sheets_v4.Sheets,
