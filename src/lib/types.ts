@@ -105,8 +105,27 @@ export interface ColumnMapping {
   ai_editable: boolean
   read_only: boolean
   is_formula: boolean
+  /** 反映時の文字色（#RRGGBB）。null なら書式を変更しません */
+  write_text_color: string | null
+  /** 反映時の横方向の配置。null なら書式を変更しません */
+  write_horizontal_align: HorizontalAlign | null
+  /** true なら反映時に太字にします（false は書式を変更しません） */
+  write_bold: boolean
   created_at: string
   updated_at: string
+}
+
+export type HorizontalAlign = 'LEFT' | 'CENTER' | 'RIGHT'
+
+/**
+ * セル書式。各項目の null は「指定なし」を表します。
+ * 反映時は null 以外の項目だけを書き込み、
+ * 変更前スナップショットでは null を「既定の書式」として扱います。
+ */
+export interface CellFormat {
+  textColor: string | null
+  horizontalAlign: HorizontalAlign | null
+  bold: boolean | null
 }
 
 export interface UpdateBatch {
@@ -153,6 +172,10 @@ export interface SheetUpdateLog {
   column_name: string | null
   old_value: string | null
   new_value: string | null
+  /** 反映前の書式。書式を適用しなかった場合は null */
+  old_format: CellFormat | null
+  /** 反映時に適用した書式。書式を適用しなかった場合は null */
+  new_format: CellFormat | null
   status: LogStatus
   verification_status: VerificationStatus
   error_message: string | null
@@ -183,6 +206,8 @@ export interface UpdateCandidate {
   newValue: string
   confidence: number
   enabled: boolean
+  /** 確認画面での書式の個別指定。未指定なら列の事前設定に従います */
+  format?: CellFormat | null
 }
 
 /** 確認画面で扱う 1 案件分のブロック */
@@ -206,6 +231,8 @@ export interface ApplyCellPayload {
   newValue: string
   /** 確認画面表示時点の値。反映直前の現在値と照合します。 */
   observedOldValue: string
+  /** 書式の個別指定。未指定なら列の事前設定に従います */
+  format?: CellFormat | null
 }
 
 /** /api/updates/apply へ送る 1 案件分のペイロード */

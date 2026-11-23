@@ -12,7 +12,9 @@ export interface WritableCheckResult {
   reason: string | null
 }
 
-export function checkWritable(mapping: ColumnMapping | undefined): WritableCheckResult {
+export function checkWritable(
+  mapping: Pick<ColumnMapping, 'read_only' | 'is_formula' | 'ai_editable'> | undefined,
+): WritableCheckResult {
   if (!mapping) {
     return { writable: false, reason: '列マッピングが存在しません' }
   }

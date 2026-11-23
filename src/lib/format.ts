@@ -1,5 +1,11 @@
 import { APP_TIMEZONE } from '@/lib/constants'
-import type { BatchStatus, LogStatus } from '@/lib/types'
+import type {
+  BatchStatus,
+  CellFormat,
+  ColumnMapping,
+  HorizontalAlign,
+  LogStatus,
+} from '@/lib/types'
 
 /** 表示フォーマットの共通関数 */
 
@@ -53,4 +59,49 @@ export function logStatusTone(status: LogStatus): 'success' | 'warning' | 'error
 /** 空文字を「(空)」として表示します */
 export function displayValue(value: string | null | undefined): string {
   return value && value !== '' ? value : '(空)'
+}
+
+export const HORIZONTAL_ALIGN_LABEL: Record<HorizontalAlign, string> = {
+  LEFT: '左揃え',
+  CENTER: '中央揃え',
+  RIGHT: '右揃え',
+}
+
+/** 書式の項目が 1 つでも指定されているかを判定します */
+export function hasCellFormat(format: CellFormat | null | undefined): format is CellFormat {
+  return (
+    !!format &&
+    (format.textColor !== null || format.horizontalAlign !== null || format.bold !== null)
+  )
+}
+
+/** 書式の内容を「赤文字・中央揃え・太字」のような短い文で表します */
+export function describeCellFormat(format: CellFormat | null | undefined): string {
+  if (!hasCellFormat(format)) {
+    return '書式変更なし'
+  }
+  const parts: string[] = []
+  if (format.textColor !== null) {
+    parts.push(`文字色 ${format.textColor}`)
+  }
+  if (format.horizontalAlign !== null) {
+    parts.push(HORIZONTAL_ALIGN_LABEL[format.horizontalAlign])
+  }
+  if (format.bold) {
+    parts.push('太字')
+  }
+  return parts.join('・')
+}
+
+/** 列の事前設定から反映時の書式を作ります（何も設定されていなければ null） */
+export function formatFromMapping(mapping: ColumnMapping | undefined): CellFormat | null {
+  if (!mapping) {
+    return null
+  }
+  const format: CellFormat = {
+    textColor: mapping.write_text_color,
+    horizontalAlign: mapping.write_horizontal_align,
+    bold: mapping.write_bold ? true : null,
+  }
+  return hasCellFormat(format) ? format : null
 }

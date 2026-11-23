@@ -1,8 +1,9 @@
 'use client'
 
+import { CellFormatFields } from '@/components/CellFormatFields'
 import { ProjectCombobox } from '@/components/ProjectCombobox'
 import { Badge, Banner, Button, Card, Label, Select, TextInput } from '@/components/ui'
-import { displayValue } from '@/lib/format'
+import { describeCellFormat, displayValue, formatFromMapping } from '@/lib/format'
 import type { AnalyzedBlock, ColumnMapping, ProjectRow, UpdateCandidate } from '@/lib/types'
 
 /**
@@ -87,6 +88,16 @@ export function ReviewBlockCard({
           enabled: true,
         },
       ],
+    })
+  }
+
+  /** 書式の個別指定を切り替えます（ON 時は列の事前設定を初期値にします） */
+  function handleToggleFormatOverride(candidateId: string, columnIndex: number, enabled: boolean) {
+    const mapping = editableMappings.find((item) => item.column_index === columnIndex)
+    patchCandidate(candidateId, {
+      format: enabled
+        ? (formatFromMapping(mapping) ?? { textColor: null, horizontalAlign: null, bold: null })
+        : undefined,
     })
   }
 
@@ -180,6 +191,43 @@ export function ReviewBlockCard({
                     onChange={(e) => patchCandidate(candidate.id, { newValue: e.target.value })}
                   />
                 </div>
+              </div>
+
+              <div className="mt-3 border-t border-[#dfe1e6] pt-3">
+                <label className="flex items-center gap-2 text-sm text-[#42526e]">
+                  <input
+                    type="checkbox"
+                    checked={!!candidate.format}
+                    onChange={(e) =>
+                      handleToggleFormatOverride(
+                        candidate.id,
+                        candidate.columnIndex,
+                        e.target.checked,
+                      )
+                    }
+                  />
+                  書式を個別に指定する
+                </label>
+                {candidate.format ? (
+                  <div className="mt-2">
+                    <CellFormatFields
+                      value={candidate.format}
+                      onChange={(format) => patchCandidate(candidate.id, { format })}
+                    />
+                  </div>
+                ) : (
+                  <p className="mt-1 text-xs text-[#5e6c84]">
+                    列の設定に従います（
+                    {describeCellFormat(
+                      formatFromMapping(
+                        editableMappings.find(
+                          (mapping) => mapping.column_index === candidate.columnIndex,
+                        ),
+                      ),
+                    )}
+                    ）
+                  </p>
+                )}
               </div>
             </div>
           ))

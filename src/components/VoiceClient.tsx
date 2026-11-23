@@ -97,6 +97,8 @@ export function VoiceClient() {
             columnIndex: candidate.columnIndex,
             newValue: candidate.newValue,
             observedOldValue: candidate.currentValue,
+            // 個別指定がなければ送らず、サーバー側で列の事前設定を適用します
+            format: candidate.format ?? undefined,
           })),
       }))
       .filter((project) => project.cells.length > 0)

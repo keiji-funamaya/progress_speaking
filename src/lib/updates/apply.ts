@@ -1,6 +1,7 @@
 import { createAdminSupabase } from '@/lib/supabase/server'
 import { columnIndexToLetter } from '@/lib/sheets/a1'
-import { fetchCellValue, updateCell } from '@/lib/sheets/client'
+import { applyCellFormat, fetchCellFormat, fetchCellValue, updateCell } from '@/lib/sheets/client'
+import { formatFromMapping, hasCellFormat } from '@/lib/format'
 import {
   assertHeaderUnchanged,
   loadDataRows,
@@ -13,6 +14,7 @@ import type {
   ApplyCellResult,
   ApplyProjectPayload,
   BatchStatus,
+  CellFormat,
   LogStatus,
   VerificationStatus,
 } from '@/lib/types'
@@ -26,8 +28,10 @@ import type { AuthContext } from '@/lib/auth/context'
  *   2. 対象案件を識別情報から再検索（解析時の行番号は信用しない）
  *   3. 対象セルの現在値を再取得し、確認画面表示時の値と照合（競合チェック）
  *   4. update_batch 作成（status = applying）
- *   5. old_value / new_value を sheet_update_logs へ保存（status = pending）
- *   6. 対象セルだけを更新
+ *   5. old_value / new_value（書式を適用する場合は old_format / new_format も）を
+ *      sheet_update_logs へ保存（status = pending）
+ *   6. 対象セルだけを更新し、書式の指定があれば書式も適用
+ *      （書式の優先順位: 確認画面での個別指定 > 列の事前設定 > 書式変更なし）
  *   7. 更新後に再取得して検証
  *   8. log / batch の status を確定
  */
@@ -48,6 +52,10 @@ interface PreparedCell {
   columnName: string | null
   oldValue: string
   newValue: string
+  /** 適用する書式。書式を変更しない場合は null */
+  newFormat: CellFormat | null
+  /** 適用前の書式（ロールバック用）。書式を変更しない場合は null */
+  oldFormat: CellFormat | null
   projectLabel: string
   identifier: ApplyProjectPayload['identifier']
   /** 事前チェックで弾かれた場合の理由 */
@@ -87,6 +95,8 @@ async function prepareCells(
           columnName: mapping?.column_name ?? null,
           oldValue: cell.observedOldValue,
           newValue: cell.newValue,
+          newFormat: null,
+          oldFormat: null,
           projectLabel,
           identifier: project.identifier,
           blockedReason: reason,
@@ -115,6 +125,8 @@ async function prepareCells(
           columnName: mapping?.column_name ?? null,
           oldValue: cell.observedOldValue,
           newValue: cell.newValue,
+          newFormat: null,
+          oldFormat: null,
           projectLabel: label,
           identifier: project.identifier,
           blockedReason: `この列は更新できません（${writable.reason}）`,
@@ -140,6 +152,8 @@ async function prepareCells(
           columnName: mapping?.column_name ?? null,
           oldValue: currentValue,
           newValue: cell.newValue,
+          newFormat: null,
+          oldFormat: null,
           projectLabel: label,
           identifier: project.identifier,
           blockedReason:
@@ -150,6 +164,23 @@ async function prepareCells(
         continue
       }
 
+      // 書式の決定（個別指定があれば列の事前設定より優先。全項目が空の個別指定は「書式変更なし」）
+      const newFormat = cell.format
+        ? hasCellFormat(cell.format)
+          ? cell.format
+          : null
+        : formatFromMapping(mapping)
+      // ロールバックで元に戻せるよう、適用前の書式を控えておきます
+      const oldFormat = newFormat
+        ? await fetchCellFormat(
+            context.sheetsApi,
+            spreadsheetId,
+            sheetName,
+            rowNumber,
+            cell.columnIndex,
+          )
+        : null
+
       prepared.push({
         rowNumber,
         columnIndex: cell.columnIndex,
@@ -157,6 +188,8 @@ async function prepareCells(
         columnName: mapping?.column_name ?? null,
         oldValue: currentValue,
         newValue: cell.newValue,
+        newFormat,
+        oldFormat,
         projectLabel: label,
         identifier: project.identifier,
         blockedReason: null,
@@ -236,6 +269,8 @@ export async function applyUpdates(
         column_name: cell.columnName,
         old_value: cell.oldValue,
         new_value: cell.newValue,
+        old_format: cell.oldFormat,
+        new_format: cell.newFormat,
         status: 'pending',
         verification_status: 'pending',
       })),
@@ -282,6 +317,24 @@ export async function applyUpdates(
         if (written === cell.newValue) {
           status = 'applied'
           verificationStatus = 'verified'
+
+          // 値の反映後に書式を適用します（失敗しても値の反映は有効なまま、メッセージで通知）
+          if (cell.newFormat) {
+            try {
+              await applyCellFormat(
+                context.sheetsApi,
+                spreadsheetId,
+                context.sheetConfig.sheet_id,
+                cell.rowNumber,
+                cell.columnIndex,
+                cell.newFormat,
+              )
+            } catch (error) {
+              message = `値は反映しましたが、書式の適用に失敗しました（${
+                error instanceof Error ? error.message : '不明なエラー'
+              }）`
+            }
+          }
         } else {
           status = 'failed'
           verificationStatus = 'failed'

@@ -1,5 +1,5 @@
 import { createAdminSupabase } from '@/lib/supabase/server'
-import { fetchCellValue, updateCell } from '@/lib/sheets/client'
+import { applyCellFormat, fetchCellValue, updateCell } from '@/lib/sheets/client'
 import { loadDataRows, loadSheetContext, type SheetContext } from '@/lib/sheets/context'
 import { findRowByIdentifier } from '@/lib/sheets/projects'
 import type { AuthContext } from '@/lib/auth/context'
@@ -14,7 +14,7 @@ import type { BatchStatus, RollbackCellResult, SheetUpdateLog } from '@/lib/type
  *   3. Google Sheets の現在値を取得
  *   4. 現在値 == new_value のときだけ old_value を書き戻す
  *      （異なる場合は反映後に第三者が変更した可能性 → 停止して競合表示）
- *   5. 書き戻し後に再取得して検証
+ *   5. 書き戻し後に再取得して検証。反映時に書式を適用していれば元の書式にも戻す
  *   6. status を確定（履歴は削除しない）
  */
 
@@ -118,13 +118,34 @@ async function revertOne(
     )
 
     if (written === restoreValue) {
+      // 反映時に変更した書式の項目だけを、反映前の書式へ戻します
+      // （失敗しても値の書き戻しは有効なまま、メッセージで通知）
+      let formatMessage: string | null = null
+      if (log.new_format && log.old_format) {
+        try {
+          await applyCellFormat(
+            context.sheetsApi,
+            spreadsheetId,
+            log.sheet_id,
+            rowNumber,
+            log.column_index,
+            log.old_format,
+            log.new_format,
+          )
+        } catch (error) {
+          formatMessage = `値は元に戻しましたが、書式を元に戻せませんでした（${
+            error instanceof Error ? error.message : '不明なエラー'
+          }）`
+        }
+      }
+
       await admin
         .from('sheet_update_logs')
         .update({
           status: 'reverted',
           reverted_at: new Date().toISOString(),
           reverted_by: auth.userId,
-          error_message: null,
+          error_message: formatMessage,
         })
         .eq('id', log.id)
         .eq('organization_id', auth.organizationId)
@@ -132,7 +153,7 @@ async function revertOne(
       return {
         logId: log.id,
         status: 'reverted',
-        message: null,
+        message: formatMessage,
         currentValue: written,
         expectedValue: restoreValue,
         restoredValue: written,

@@ -10,6 +10,15 @@ import { handleApiError, jsonOk } from '@/lib/api/response'
  */
 export const maxDuration = 120
 
+const cellFormatSchema = z.object({
+  textColor: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .nullable(),
+  horizontalAlign: z.enum(['LEFT', 'CENTER', 'RIGHT']).nullable(),
+  bold: z.boolean().nullable(),
+})
+
 const bodySchema = z.object({
   sheetConfigId: z.string().uuid().optional(),
   projects: z
@@ -34,6 +43,7 @@ const bodySchema = z.object({
               columnIndex: z.number().int().min(0),
               newValue: z.string(),
               observedOldValue: z.string(),
+              format: cellFormatSchema.nullish(),
             }),
           )
           .min(1),

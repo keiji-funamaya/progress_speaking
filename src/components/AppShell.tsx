@@ -29,6 +29,11 @@ export function AppShell({
           {organizationName ? (
             <span className="truncate text-xs text-[#5e6c84]">{organizationName}</span>
           ) : null}
+          <form action="/auth/signout" method="post">
+            <button type="submit" className="text-sm text-[#0052cc] hover:underline">
+              ログアウト
+            </button>
+          </form>
         </div>
       </header>
       <main className="mx-auto max-w-3xl px-4 py-4 pb-24">{children}</main>

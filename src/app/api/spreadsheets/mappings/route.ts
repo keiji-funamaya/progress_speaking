@@ -14,6 +14,13 @@ const columnSchema = z.object({
   aiEditable: z.boolean(),
   readOnly: z.boolean(),
   isFormula: z.boolean(),
+  writeTextColor: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .nullable()
+    .default(null),
+  writeHorizontalAlign: z.enum(['LEFT', 'CENTER', 'RIGHT']).nullable().default(null),
+  writeBold: z.boolean().default(false),
 })
 
 const bodySchema = z.object({
@@ -110,6 +117,9 @@ export async function POST(request: NextRequest) {
         ai_editable: column.aiEditable,
         read_only: column.readOnly,
         is_formula: column.isFormula,
+        write_text_color: column.writeTextColor,
+        write_horizontal_align: column.writeHorizontalAlign,
+        write_bold: column.writeBold,
       })),
     )
 

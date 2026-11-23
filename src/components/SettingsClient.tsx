@@ -4,7 +4,14 @@ import { useState } from 'react'
 import { apiGet, apiPost, toMessage } from '@/lib/api/fetcher'
 import { SEMANTIC_TYPES } from '@/lib/constants'
 import { Banner, Button, Card, Label, SectionTitle, Select, TextInput } from '@/components/ui'
-import type { ColumnMapping, SheetConfig, SpreadsheetConnection } from '@/lib/types'
+import { CellFormatFields } from '@/components/CellFormatFields'
+import { checkWritable } from '@/lib/validation/writable'
+import type {
+  ColumnMapping,
+  HorizontalAlign,
+  SheetConfig,
+  SpreadsheetConnection,
+} from '@/lib/types'
 
 /**
  * 設定画面の本体。
@@ -28,6 +35,22 @@ interface ColumnDraft {
   aiEditable: boolean
   readOnly: boolean
   isFormula: boolean
+  /** 反映時の書式の事前設定（null / false は書式を変更しない） */
+  writeTextColor: string | null
+  writeHorizontalAlign: HorizontalAlign | null
+  writeBold: boolean
+}
+
+/** ヘッダー解析 API が返す列（書式の事前設定は含みません） */
+type AnalyzedColumn = Omit<ColumnDraft, 'writeTextColor' | 'writeHorizontalAlign' | 'writeBold'>
+
+/** 書き込み可否の判定を ColumnDraft に対して行います */
+function isDraftWritable(column: ColumnDraft): boolean {
+  return checkWritable({
+    read_only: column.readOnly,
+    is_formula: column.isFormula,
+    ai_editable: column.aiEditable,
+  }).writable
 }
 
 interface Props {
@@ -70,6 +93,9 @@ export function SettingsClient({
       aiEditable: mapping.ai_editable,
       readOnly: mapping.read_only,
       isFormula: mapping.is_formula,
+      writeTextColor: mapping.write_text_color,
+      writeHorizontalAlign: mapping.write_horizontal_align,
+      writeBold: mapping.write_bold,
     })),
   )
 
@@ -118,7 +144,7 @@ export function SettingsClient({
       const data = await apiPost<{
         header: string[]
         samples: string[][]
-        columns: ColumnDraft[]
+        columns: AnalyzedColumn[]
       }>('/api/spreadsheets/headers', {
         spreadsheetConnectionId,
         sheetName: selectedSheet.sheetName,
@@ -126,7 +152,18 @@ export function SettingsClient({
       })
       setHeader(data.header)
       setSamples(data.samples)
-      setColumns(data.columns)
+      // 再解析しても、同じ列の書式の事前設定は引き継ぎます
+      setColumns((prev) =>
+        data.columns.map((column) => {
+          const previous = prev.find((item) => item.columnIndex === column.columnIndex)
+          return {
+            ...column,
+            writeTextColor: previous?.writeTextColor ?? null,
+            writeHorizontalAlign: previous?.writeHorizontalAlign ?? null,
+            writeBold: previous?.writeBold ?? false,
+          }
+        }),
+      )
       setStatus('AI が列の意味を推定しました。内容を確認・修正して保存してください。')
     })
   }
@@ -355,6 +392,28 @@ export function SettingsClient({
                     数式列
                   </label>
                 </div>
+
+                {isDraftWritable(column) ? (
+                  <div className="mt-3 border-t border-[#dfe1e6] pt-3">
+                    <p className="mb-2 text-xs font-semibold text-[#5e6c84]">
+                      反映時の書式（指定なしの項目はスプレッドシートの書式を変更しません）
+                    </p>
+                    <CellFormatFields
+                      value={{
+                        textColor: column.writeTextColor,
+                        horizontalAlign: column.writeHorizontalAlign,
+                        bold: column.writeBold ? true : null,
+                      }}
+                      onChange={(format) =>
+                        updateColumn(column.columnIndex, {
+                          writeTextColor: format.textColor,
+                          writeHorizontalAlign: format.horizontalAlign,
+                          writeBold: format.bold === true,
+                        })
+                      }
+                    />
+                  </div>
+                ) : null}
               </div>
             ))}
           </div>

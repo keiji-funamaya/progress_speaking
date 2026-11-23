@@ -1,6 +1,7 @@
 import { google, type sheets_v4 } from 'googleapis'
 import type { OAuth2Client } from 'google-auth-library'
 import { cellRange, quoteSheetName, rowsRange } from '@/lib/sheets/a1'
+import type { CellFormat } from '@/lib/types'
 
 /**
  * Google Sheets API の薄いラッパー。
@@ -152,6 +153,124 @@ export async function updateCell(
     range: cellRange(sheetName, rowNumber, columnIndex),
     valueInputOption: 'USER_ENTERED',
     requestBody: { values: [[value]] },
+  })
+}
+
+/** '#RRGGBB' を Sheets API の rgbColor（0〜1）へ変換します */
+function hexToRgbColor(hex: string): sheets_v4.Schema$Color {
+  const matched = hex.match(/^#?([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})$/)
+  if (!matched) {
+    throw new Error(`文字色の指定が不正です: ${hex}`)
+  }
+  return {
+    red: parseInt(matched[1], 16) / 255,
+    green: parseInt(matched[2], 16) / 255,
+    blue: parseInt(matched[3], 16) / 255,
+  }
+}
+
+/** Sheets API の rgbColor を '#RRGGBB' へ変換します（省略された成分は 0 扱い） */
+function rgbColorToHex(color: sheets_v4.Schema$Color): string {
+  const toHex = (value: number | null | undefined) =>
+    Math.round((value ?? 0) * 255)
+      .toString(16)
+      .padStart(2, '0')
+      .toUpperCase()
+  return `#${toHex(color.red)}${toHex(color.green)}${toHex(color.blue)}`
+}
+
+/**
+ * 単一セルの書式（文字色・横方向の配置・太字）を取得します。
+ * 未設定の項目は null を返します。テーマカラー指定の文字色は再現できないため null 扱いです。
+ */
+export async function fetchCellFormat(
+  sheetsApi: sheets_v4.Sheets,
+  spreadsheetId: string,
+  sheetName: string,
+  rowNumber: number,
+  columnIndex: number,
+): Promise<CellFormat> {
+  const res = await sheetsApi.spreadsheets.get({
+    spreadsheetId,
+    ranges: [cellRange(sheetName, rowNumber, columnIndex)],
+    fields:
+      'sheets(data(rowData(values(userEnteredFormat(textFormat(foregroundColorStyle,bold),horizontalAlignment)))))',
+  })
+  const userFormat = res.data.sheets?.[0]?.data?.[0]?.rowData?.[0]?.values?.[0]?.userEnteredFormat
+  const rgbColor = userFormat?.textFormat?.foregroundColorStyle?.rgbColor
+  const align = userFormat?.horizontalAlignment
+
+  return {
+    textColor: rgbColor ? rgbColorToHex(rgbColor) : null,
+    horizontalAlign: align === 'LEFT' || align === 'CENTER' || align === 'RIGHT' ? align : null,
+    bold: typeof userFormat?.textFormat?.bold === 'boolean' ? userFormat.textFormat.bold : null,
+  }
+}
+
+/**
+ * 単一セルへ書式を適用します（値には触れません）。
+ *
+ * @param format 書き込む書式。null の項目は既定の書式に戻ります
+ * @param targetFields 変更対象の項目。null 以外の項目だけを変更します（省略時は format と同じ）
+ */
+export async function applyCellFormat(
+  sheetsApi: sheets_v4.Sheets,
+  spreadsheetId: string,
+  sheetId: number,
+  rowNumber: number,
+  columnIndex: number,
+  format: CellFormat,
+  targetFields: CellFormat = format,
+): Promise<void> {
+  const fields: string[] = []
+  const userEnteredFormat: sheets_v4.Schema$CellFormat = {}
+  const textFormat: sheets_v4.Schema$TextFormat = {}
+
+  if (targetFields.textColor !== null) {
+    fields.push('userEnteredFormat.textFormat.foregroundColorStyle')
+    if (format.textColor !== null) {
+      textFormat.foregroundColorStyle = { rgbColor: hexToRgbColor(format.textColor) }
+    }
+  }
+  if (targetFields.bold !== null) {
+    fields.push('userEnteredFormat.textFormat.bold')
+    if (format.bold !== null) {
+      textFormat.bold = format.bold
+    }
+  }
+  if (targetFields.horizontalAlign !== null) {
+    fields.push('userEnteredFormat.horizontalAlignment')
+    if (format.horizontalAlign !== null) {
+      userEnteredFormat.horizontalAlignment = format.horizontalAlign
+    }
+  }
+
+  if (fields.length === 0) {
+    return
+  }
+  if (Object.keys(textFormat).length > 0) {
+    userEnteredFormat.textFormat = textFormat
+  }
+
+  await sheetsApi.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [
+        {
+          repeatCell: {
+            range: {
+              sheetId,
+              startRowIndex: rowNumber - 1,
+              endRowIndex: rowNumber,
+              startColumnIndex: columnIndex,
+              endColumnIndex: columnIndex + 1,
+            },
+            cell: { userEnteredFormat },
+            fields: fields.join(','),
+          },
+        },
+      ],
+    },
   })
 }
 
